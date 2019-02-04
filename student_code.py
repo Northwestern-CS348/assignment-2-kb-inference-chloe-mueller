@@ -128,7 +128,77 @@ class KnowledgeBase(object):
         printv("Retracting {!r}", 0, verbose, [fact_or_rule])
         ####################################################
         # Student code goes here
-        
+
+        # return if given a rule
+        if fact_or_rule in self.rules:
+            return;
+
+        if fact_or_rule in self.facts:
+            # get fact index
+            fact_index = self.facts.index(fact_or_rule)
+            #retract fact
+            fact_or_rule.asserted = False;
+
+            # if supported, return
+            if len(self.facts[fact_index].supported_by) > 0:
+                return
+
+            #if not supported
+            if len(self.facts[fact_index].supported_by) == 0:
+
+                #scan through facts that fact supports
+                for baby_fact in self.facts[fact_index].supports_facts:
+                    for babyfact_support in baby_fact.supported_by:
+                        if self.facts[fact_index] in babyfact_support:
+                            baby_fact.supported_by.remove(babyfact_support)
+                            # send to recursive function
+                    self.kb_del(baby_fact)
+
+                for baby_rule in self.facts[fact_index].supports_rules:
+                    for br_support in baby_rule.supported_by:
+                        if self.facts[fact_index] in br_support:
+                            baby_rule.supported_by.remove(br_support)
+                    self.kb_del(baby_rule)
+
+                self.facts.remove(fact_or_rule)
+
+
+    def kb_del(self, fact_or_rule):
+
+        if isinstance(fact_or_rule, Fact):
+            if fact_or_rule.asserted == True:
+                return
+
+            #if not supported
+            if len(fact_or_rule.supported_by) == 0:
+                self.facts.remove(fact_or_rule)
+                for baby in fact_or_rule.supports_facts:
+                    for baby_supporter in baby.supported_by:
+                        if fact_or_rule in baby_supporter:
+                            baby.supported_by.remove(baby_supporter)
+                    self.kb_del(baby)
+
+        if isinstance(fact_or_rule, Rule):
+            if fact_or_rule.asserted == True:
+                return
+
+            if len(fact_or_rule.supported_by) == 0:
+                self.rules.remove(fact_or_rule)
+                for baby in fact_or_rule.supports_rules:
+                    for baby_supporter in baby.supported_by:
+                        if fact_or_rule in baby_supporter:
+                            baby.supported_by.remove(baby_supporter)
+                    self.kb_del(baby)
+
+
+
+
+
+
+
+
+
+
 
 class InferenceEngine(object):
     def fc_infer(self, fact, rule, kb):
@@ -140,9 +210,35 @@ class InferenceEngine(object):
             kb (KnowledgeBase) - A KnowledgeBase
 
         Returns:
-            Nothing            
+            Nothing
         """
         printv('Attempting to infer from {!r} and {!r} => {!r}', 1, verbose,
             [fact.statement, rule.lhs, rule.rhs])
         ####################################################
         # Student code goes here
+
+        if not isinstance(fact, Fact) or not isinstance(rule, Rule):
+            print("Error: Incorrect input")
+            return
+
+        bindings = match(fact.statement, rule.lhs[0])
+
+        if bindings:
+            if len(rule.lhs) == 1:
+                new_fact = Fact(instantiate(rule.rhs, bindings))
+                new_fact.supported_by.append([fact, rule])
+                rule.supports_facts.append(new_fact)
+                fact.supports_facts.append(new_fact)
+                new_fact.asserted = False
+                kb.kb_assert(new_fact)
+
+            else:
+                lhs_list = []
+                for r in rule.lhs[1:]:
+                    lhs_list.append(instantiate(r, bindings))
+                rhs_list = (instantiate(rule.rhs, bindings))
+                new_rule = Rule([lhs_list, rhs_list], [[fact, rule]])
+                rule.supports_rules.append(new_rule)
+                fact.supports_rules.append(new_rule)
+                new_rule.asserted = False
+                kb.kb_assert(new_rule)
